@@ -1,0 +1,159 @@
+print("🚀 EY !! Bro")
+
+import pandas as pd
+import unicodedata
+import re
+from datetime import date
+import datetime
+from openpyxl import load_workbook
+from openpyxl.chart import BarChart, Reference
+import os
+
+# ============================================
+# 1. CONFIGURACIÓN DE ARCHIVOS
+# ============================================
+archivo_entrada = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\2. RIPS\7. AM_Medicamentos (Julio).xlsx"
+df_principal = pd.read_excel(archivo_entrada, dtype=str, engine="openpyxl")
+
+archivo_maestra = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\3. Usuarios\2. BD Manager 4.0\BD_MAESTRA_SIKUANY_2025-11-25.xlsx"
+df_maestra = pd.read_excel(archivo_maestra, sheet_name="BD_MAESTRA", dtype=str, engine="openpyxl")
+
+print("📥 Registros iniciales:", len(df_principal))
+
+# ============================================
+# 2. NORMALIZACIÓN DE COLUMNAS
+# ============================================
+def normalizar_columnas(df):
+    df.columns = (
+        df.columns
+        .str.lower()
+        .str.normalize("NFKD").str.encode("ascii", "ignore").str.decode("utf-8")
+        .str.replace(" ", "_")
+        .str.replace(r"[^a-z0-9_]", "", regex=True)
+    )
+    return df
+
+df_principal = normalizar_columnas(df_principal)
+df_maestra = normalizar_columnas(df_maestra)
+
+# ============================================
+# 3. FUNCIÓN DUPLICADOS + LLAVE USUARIOS
+# ============================================
+def procesar_principal(df):
+
+    columnas_requeridas = [
+        "tipo_identificacion",
+        "numero_identificacion",
+        "factura",
+        "fecha_dispensacion_o_administracion",
+        "diagnostico_principal",
+        "codigo_medicamento"
+    ]
+
+    for col in columnas_requeridas:
+        if col not in df.columns:
+            raise KeyError(f"❌ Falta la columna requerida: {col}")
+
+    # 🚨 Normalizamos fecha_servicio a formato YYYYMMDD (crítico para el cálculo de edad)
+    df["fecha_dispensacion_o_administracion"] = pd.to_datetime(
+        df["fecha_dispensacion_o_administracion"], errors="coerce"
+    ).dt.strftime("%Y%m%d")
+
+    # LLAVE DUPLICIDAD
+    df["llave_duplicidad"] = (
+        df["numero_identificacion"].astype(str).str.strip() + "_" +
+        df["fecha_dispensacion_o_administracion"].astype(str).str.strip() + "_" +
+        df["diagnostico_principal"].astype(str).str.strip() + "_" +
+        df["codigo_medicamento"].astype(str).str.strip()
+    )
+
+    # ALERTA
+    df["alerta_duplicidad"] = df.duplicated("llave_duplicidad", keep=False).map({
+        False: "Duplicidad No Encontrada",
+        True: "Duplicidad Encontrada"
+    })
+
+    # LLAVE USUARIOS
+    df["llave_usuarios"] = (
+        df["tipo_identificacion"].astype(str).str.strip() + "_" +
+        df["numero_identificacion"].astype(str).str.strip() + "_" +
+        df["factura"].astype(str).str.strip()
+    )
+
+    return df
+
+df_principal = procesar_principal(df_principal)
+
+# ============================================
+# 4. PREPARAR BASE MAESTRA PARA CRUCE
+# ============================================
+if "llave" not in df_maestra.columns:
+    raise KeyError("❌ No existe la columna 'LLAVE' en la base maestra después de normalizar.")
+
+# Normalizar fecha nacimiento
+df_maestra["fecha_nacimiento"] = pd.to_datetime(
+    df_maestra["fecha_nacimiento"], errors="coerce"
+).dt.strftime("%Y-%m-%d")
+
+# ============================================
+# 5. CRUCE ENTRE PRINCIPAL Y MAESTRA
+# ============================================
+df_result = df_principal.merge(
+    df_maestra[["llave", "fecha_nacimiento", "sexo", "archivo_origen"]],
+    left_on="llave_usuarios",
+    right_on="llave",
+    how="left"
+)
+
+# ============================================
+# 6. GENERAR GRUPO ETARIO
+# ============================================
+def calcular_edad(fecha_nac, fecha_serv):
+    try:
+        f_nac = datetime.datetime.strptime(str(fecha_nac), "%Y-%m-%d")
+        f_serv = datetime.datetime.strptime(str(fecha_serv), "%Y%m%d")
+        return (f_serv - f_nac).days // 365
+    except:
+        return None
+
+df_result["edad"] = df_result.apply(
+    lambda x: calcular_edad(x["fecha_nacimiento"], x["fecha_dispensacion_o_administracion"]),
+    axis=1
+)
+
+def grupo_etario(edad):
+    if edad is None: return "Sin dato"
+    if edad < 5: return "Primera Infancia"
+    if edad <= 11: return "Infancia"
+    if edad <= 18: return "Adolescencia"
+    if edad <= 26: return "Juventud"
+    if edad <= 59: return "Adultez"
+    return "Persona Mayor"
+
+df_result["grupo_etario"] = df_result["edad"].apply(grupo_etario)
+
+# ============================================
+# 7. VALIDACIÓN NACIDO / NO NACIDO
+# ============================================
+def validar_nacimiento(fecha_nacimiento, fecha_servicio):
+    try:
+        f_nac = datetime.datetime.strptime(str(fecha_nacimiento), "%Y-%m-%d")
+        f_serv = datetime.datetime.strptime(str(fecha_servicio), "%Y%m%d")
+        return "Servicio a Usuario NO nacido" if f_nac > f_serv else "Servicio a Usuario nacido"
+    except:
+        return "Sin dato"
+
+df_result["validacion_usuario_nacido"] = df_result.apply(
+    lambda x: validar_nacimiento(x["fecha_nacimiento"], x["fecha_dispensacion_o_administracion"]),
+    axis=1
+)
+
+# ============================================
+# 8. EXPORTAR RESULTADOS
+# ============================================
+archivo_salida = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\6. Resultado Final\01.Modulo_Usuarios_Julio_2025.xlsx"
+df_result.to_excel(archivo_salida, index=False)
+
+print("📤 Archivo generado exitosamente:", archivo_salida)
+print("📊 Registros finales:", len(df_result))
+print("🏁 Módulo de Usuarios Check")
