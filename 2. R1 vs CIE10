@@ -1,0 +1,118 @@
+print("🚀 EY !! Bro")
+
+import pandas as pd
+import unicodedata
+import re
+from datetime import date
+import datetime
+
+# ============================================
+# 1. CONFIGURACIÓN DE ARCHIVOS
+# ============================================
+archivo_entrada = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\6. Resultado Final\7. Julio 2025\01.Modulo_Usuarios_Julio_2025.xlsx"
+df_principal = pd.read_excel(archivo_entrada, dtype=str, engine="openpyxl")
+
+archivo_maestra = r"C:\Users\alejandroar\Desktop\1. Capita\0.1. BD Fijas (Resolución 2275 de 2023)\2. BD Cruzar\1. TablaReferencia_CIE10__1.xlsx"
+df_maestra = pd.read_excel(archivo_maestra, sheet_name="Hoja1", dtype=str, engine="openpyxl")
+
+print("📥 Registros iniciales:", len(df_principal))
+
+# Normalizar columnas
+def normalizar_columnas(df):
+    df.columns = (
+        df.columns
+        .str.lower()
+        .str.normalize("NFKD").str.encode("ascii", "ignore").str.decode("utf-8")
+        .str.replace(" ", "_")
+        .str.replace(r"[^a-z0-9_]", "", regex=True)
+    )
+    return df
+
+df_principal = normalizar_columnas(df_principal)
+df_maestra = normalizar_columnas(df_maestra)
+
+# ============================================
+# 2. VERIFICAR COLUMNAS NECESARIAS
+# ============================================
+columnas_cie10 = [
+    "codigo",
+    "descripcion",
+    "extra_iiedadminima",
+    "extra_iiiedadmaxima",
+    "extra_xsexo"
+]
+
+for col in columnas_cie10:
+    if col not in df_maestra.columns:
+        raise KeyError(f"❌ Falta la columna requerida en CIE10: {col}")
+
+# ============================================
+# 3. CRUCE PRINCIPAL CON CIE10
+# ============================================
+df_cie = df_principal.merge(
+    df_maestra[columnas_cie10],
+    left_on="diagnostico_principal",
+    right_on="codigo",
+    how="left"
+)
+
+# ============================================
+# 4. ALERTA 1 – SIMILITUD DIAGNÓSTICO
+# ============================================
+df_cie["alerta_similitud_diagnostico"] = df_cie.apply(
+    lambda x: "Similitud Encontrada" if x["diagnostico_principal"] == x["codigo"] else "Similitud No Encontrada",
+    axis=1
+)
+
+# ============================================
+# 5. ALERTA 2 – RANGO DE EDAD
+# ============================================
+
+def evaluar_rango_edad(edad, minimo, maximo):
+    try:
+        edad = int(edad)
+        minimo = int(minimo) if pd.notna(minimo) else None
+        maximo = int(maximo) if pd.notna(maximo) else None
+
+        if minimo is None or maximo is None:
+            return "Sin Dato CIE10"
+
+        if minimo <= edad <= maximo:
+            return "Dentro del Rango"
+        else:
+            return "Fuera del Rango"
+    except:
+        return "Sin Dato"
+
+df_cie["alerta_rango_edad"] = df_cie.apply(
+    lambda x: evaluar_rango_edad(x["edad"], x["extra_iiedadminima"], x["extra_iiiedadmaxima"]),
+    axis=1
+)
+
+# ============================================
+# 6. ALERTA 3 – COINCIDENCIA DE SEXO
+# ============================================
+def validar_sexo(sexo_paciente, sexo_cie):
+    if pd.isna(sexo_paciente) or pd.isna(sexo_cie):
+        return "Sin Información"
+    sexo_paciente = str(sexo_paciente).strip().upper()
+    sexo_cie = str (sexo_cie).strip().upper()
+    if sexo_cie in ["A","AMBOS","NA","No Aplica"]:
+        return "Coincide"
+    elif sexo_paciente == sexo_cie:
+        return "Coincide"
+    else:
+        return "No Coincide"
+
+df_cie["alerta_sexo"] = df_cie.apply(
+    lambda x: validar_sexo(x["sexo"], x["extra_xsexo"]),
+    axis=1)
+
+# ============================================
+# 7. EXPORTAR RESULTADO
+# ============================================
+archivo_salida = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\6. Resultado Final\7. Julio 2025\02.Modulo_CIE10_Julio_2025.xlsx"
+df_cie.to_excel(archivo_salida, index=False)
+
+print("📤 Archivo generado exitosamente:", archivo_salida)
+print("🏁 Módulo R1 vs CIE10 Finalizado")
