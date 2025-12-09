@@ -1,0 +1,79 @@
+print("🚀 EY !! Bro")
+
+import pandas as pd
+import unicodedata
+import re
+from datetime import date
+import datetime
+
+# ============================================
+# 1. CONFIGURACIÓN DE ARCHIVOS
+# ============================================
+archivo_entrada = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\6. Resultado Final\7. Julio 2025\02.Modulo_CIE10_Julio_2025.xlsx"
+df_principal = pd.read_excel(archivo_entrada, dtype=str, engine="openpyxl")
+
+archivo_maestra = r"C:\Users\alejandroar\Desktop\1. Capita\0.1. BD Fijas (Resolución 2275 de 2023)\2. BD Cruzar\2. TablaReferencia_CatalogoCUMs__1.xlsx"
+df_maestra = pd.read_excel(archivo_maestra, sheet_name="Hoja1", dtype=str, engine="openpyxl")
+
+print("📥 Registros iniciales:", len(df_principal))
+
+# ============================================
+# 2. VALIDACIÓN DE COLUMNAS NECESARIAS
+# ============================================
+col_principal = "codigo_medicamento"
+col_maestra = "Codigo"
+
+if col_principal not in df_principal.columns:
+    raise KeyError(f"❌ Falta la columna requerida en la BD Principal: {col_principal}")
+
+columnas_requeridas_maestra = [
+    "Codigo",
+    "Nombre",
+    "Extra_II:Cod_ATC",
+    "Extra_III:ATC",
+    "Extra_IV:RegistroSanitario",
+    "Extra_V:PrincipioActivo"
+]
+
+for col in columnas_requeridas_maestra:
+    if col not in df_maestra.columns:
+        raise KeyError(f"❌ Falta la columna requerida en CatalogoCUMs: {col}")
+
+# ============================================
+# 3. NORMALIZACIÓN LIGERA DE CAMPOS (EVITA ERRORES)
+# ============================================
+df_principal[col_principal] = df_principal[col_principal].astype(str).str.strip()
+df_maestra[col_maestra] = df_maestra[col_maestra].astype(str).str.strip()
+
+# ============================================
+# 4. MERGE EXACTO
+# ============================================
+df_merge = df_principal.merge(
+    df_maestra[columnas_requeridas_maestra],
+    left_on=col_principal,
+    right_on=col_maestra,
+    how="left"
+)
+
+# ============================================
+# 5. RENOMBRAR COLUMNAS PARA CLARIDAD
+# ============================================
+df_merge.rename(columns={
+    "Nombre": "cum_nombre",
+    "Extra_II:Cod_ATC": "cum_cod_atc",
+    "Extra_III:ATC": "cum_atc",
+    "Extra_IV:RegistroSanitario": "cum_registro_sanitario",
+    "Extra_V:PrincipioActivo": "cum_principio_activo"
+}, inplace=True)
+
+print("📊 Cruce completado correctamente")
+print("📌 Registros finales:", len(df_merge))
+
+# ============================================
+# 6. GUARDAR RESULTADO
+# ============================================
+salida = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\6. Resultado Final\7. Julio 2025\03.Modulo_CUMs_Julio_2025.xlsx"
+df_merge.to_excel(salida, index=False, engine="openpyxl")
+
+print("💾 Archivo generado en:")
+print(salida)
