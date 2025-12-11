@@ -141,13 +141,5 @@ print("✔ Alerta creada correctamente")
 salida = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\6. Resultado Final\7. Julio 2025\04.Modulo_CUMsInvima_Julio_2025.xlsx"
 
 df_final.to_excel(salida, index=False, engine="openpyxl")
-
-print("\n🎯 Columnas agregadas correctamente:")
-print("   - estadoregistro")
-print("   - tipo_medicamento")
-print("   - alerta_invima")
-
 print("\n💾 Archivo generado en:")
 print(salida)
-
-print("\n🚀 Módulo 4 finalizado exitosamente")
