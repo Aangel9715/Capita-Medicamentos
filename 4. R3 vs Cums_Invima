@@ -1,0 +1,153 @@
+print("🚀 EY !! Bro — Iniciando MÓDULO 4 (Cruce BD Principal vs CUMS INVIMA)") 
+
+import pandas as pd
+
+# ======================================================
+# 1. CARGA DE ARCHIVOS
+# ======================================================
+archivo_entrada = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\6. Resultado Final\7. Julio 2025\03.Modulo_CUMs_Julio_2025.xlsx"
+df_principal = pd.read_excel(archivo_entrada, dtype=str, engine="openpyxl")
+
+archivo_maestra = r"C:\Users\alejandroar\Desktop\1. Capita\0. Estado Medicamentos\3. Medicamentos - INVIMA\2. Procesados\07. BD_Cums_Clasificados_Julio_2025.xlsx"
+df_maestra = pd.read_excel(archivo_maestra, sheet_name="Hoja1", dtype=str, engine="openpyxl")
+
+print("📥 Registros BD Principal:", len(df_principal))
+print("📥 Registros BD CUMs INVIMA:", len(df_maestra))
+
+# ======================================================
+# 2. VALIDACIÓN DE COLUMNAS NECESARIAS
+# ======================================================
+cols_principal = [
+    "Codigo",
+    "cum_nombre",
+    "cum_cod_atc",
+    "cum_atc",
+    "cum_registro_sanitario",
+    "cum_principio_activo"
+]
+
+for col in cols_principal:
+    if col not in df_principal.columns:
+        raise KeyError(f"❌ Falta la columna obligatoria en BD Principal: {col}")
+
+if "LLAVE" not in df_maestra.columns:
+    raise KeyError("❌ La BD CUMs INVIMA no contiene la columna 'LLAVE'.")
+
+if "estadoregistro" not in df_maestra.columns:
+    raise KeyError("❌ Falta la columna 'estadoregistro' en BD CUMs INVIMA.")
+
+if "tipo_medicamento" not in df_maestra.columns:
+    raise KeyError("❌ Falta la columna 'tipo_medicamento' en BD CUMs INVIMA.")
+
+if "fechaexpedicion" not in df_maestra.columns:
+    raise KeyError("❌ Falta la columna 'fechaexpedicion' en BD CUMs INVIMA.")
+
+# ======================================================
+# 3. CREAR LLAVE BD PRINCIPAL (SIN NORMALIZAR)
+# ======================================================
+print("\n🔑 Creando llave_principal (sin normalizar)...")
+
+for col in cols_principal:
+    df_principal[col] = df_principal[col].fillna("")
+
+df_principal["llave_principal"] = (
+    df_principal["Codigo"] + "_" +
+    df_principal["cum_nombre"] + "_" +
+    df_principal["cum_cod_atc"] + "_" +
+    df_principal["cum_atc"] + "_" +
+    df_principal["cum_registro_sanitario"] + "_" +
+    df_principal["cum_principio_activo"]
+)
+
+print("✔ llave_principal creada correctamente")
+
+# ======================================================
+# 4. DEPURAR BD INVIMA SEGÚN FECHA MÁS RECIENTE
+# ======================================================
+print("\n🧹 Depurando BD CUMs INVIMA según fechaexpedicion...")
+
+df_maestra_reducida = df_maestra[[
+    "LLAVE", "estadoregistro", "tipo_medicamento", "fechaexpedicion", "fechavencimiento"
+]]
+
+# Convertir a fecha
+df_maestra_reducida["fechaexpedicion"] = pd.to_datetime(
+    df_maestra_reducida["fechaexpedicion"], errors="coerce"
+)
+
+# Ordenar por LLAVE y fecha más reciente
+df_maestra_reducida = df_maestra_reducida.sort_values(
+    by=["LLAVE", "fechaexpedicion"], ascending=[True, False]
+)
+
+# Eliminar duplicados quedando solo con el registro más reciente por LLAVE
+df_maestra_reducida = df_maestra_reducida.drop_duplicates(
+    subset=["LLAVE"], keep="first"
+)
+
+print("✔ BD INVIMA depurada exitosamente")
+print("🆔 Total LLAVES únicas tras depuración:", len(df_maestra_reducida))
+
+# ======================================================
+# 5. CRUCE EXACTO (SIN DUPLICADOS)
+# ======================================================
+print("\n🔗 Realizando cruce exacto llave_principal vs LLAVE...")
+
+df_final = df_principal.merge(
+    df_maestra_reducida,
+    how="left",
+    left_on="llave_principal",
+    right_on="LLAVE"
+)
+
+print("✔ Cruce completado")
+print("   → Filas antes:", len(df_principal))
+print("   → Filas después:", len(df_final))
+
+# ======================================================
+# 6. ALERTA SEGÚN ESTADO INVIMA
+# ======================================================
+print("\n🚨 Generando alerta de Comercialización...")
+
+no_comercializar = ["abandono", "negado", "vencido"]
+
+si_comercializar = [
+    "en tramite", 
+    "pérdida de fuerza ejecutoria",
+    "temporalmente no comercializable",
+    "vigente"
+]
+
+def clasificar_estado(x):
+    if pd.isna(x):
+        return ""
+    x = x.lower().strip()
+
+    if any(valor in x for valor in no_comercializar):
+        return "Med. No Se Puede Comercializar"
+
+    if any(valor in x for valor in si_comercializar):
+        return "Med. Se Puede Comercializar"
+
+    return ""
+
+df_final["alerta_invima"] = df_final["estadoregistro"].apply(clasificar_estado)
+
+print("✔ Alerta creada correctamente")
+
+# ======================================================
+# 7. EXPORTACIÓN FINAL
+# ======================================================
+salida = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\6. Resultado Final\7. Julio 2025\04.Modulo_CUMsInvima_Julio_2025.xlsx"
+
+df_final.to_excel(salida, index=False, engine="openpyxl")
+
+print("\n🎯 Columnas agregadas correctamente:")
+print("   - estadoregistro")
+print("   - tipo_medicamento")
+print("   - alerta_invima")
+
+print("\n💾 Archivo generado en:")
+print(salida)
+
+print("\n🚀 Módulo 4 finalizado exitosamente")
