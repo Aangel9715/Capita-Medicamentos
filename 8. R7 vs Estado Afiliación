@@ -1,0 +1,66 @@
+print("🚀 EY !! Bro — Iniciando MÓDULO 8 (Cruce con Estado de Afiliación)") 
+
+import pandas as pd
+import unicodedata
+import re
+from datetime import date
+import datetime
+
+# ====================================================
+# 1. CONFIGURACIÓN DE ARCHIVOS
+# ====================================================
+archivo_entrada = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\6. Resultado Final\7. Julio 2025\07.Modulo_Audifarma_Julio_2025.xlsx"
+df_principal = pd.read_excel(archivo_entrada, dtype=str, engine="openpyxl")
+
+archivo_estado = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\4. Estado Afiliación\Respuesta\07. Estado Usuarios  Capita Julio 2025.xlsx"
+df_estado = pd.read_excel(archivo_estado, sheet_name="Hoja1", dtype=str, engine="openpyxl")
+
+
+# ====================================================
+# 2. NORMALIZACIÓN DE LLAVES
+# ====================================================
+df_principal["LLAVE_PRINCIPAL"] = df_principal["LLAVE_PRINCIPAL"].fillna("").astype(str).str.strip()
+df_estado["Llave Estados"] = df_estado["Llave Estados"].fillna("").astype(str).str.strip()
+
+
+# ====================================================
+# 3. SELECCIÓN DE COLUMNAS NECESARIAS EN BD ESTADO
+# ====================================================
+columnas_estado = ["Llave Estados", "ESTADO", "ENTIDAD"]
+df_estado = df_estado[columnas_estado].copy()
+
+# Evitar duplicación 1 a 1
+df_estado = df_estado.drop_duplicates(subset=["Llave Estados"], keep="first")
+
+
+# ====================================================
+# 4. CRUCE EXACTO
+# ====================================================
+print("\n🔗 Realizando cruce con BD Estado de Afiliación...")
+
+filas_antes = len(df_principal)
+
+df_merge = df_principal.merge(
+    df_estado,
+    left_on="LLAVE_PRINCIPAL",
+    right_on="Llave Estados",
+    how="left"
+)
+
+filas_despues = len(df_merge)
+
+print("✔ Cruce completado")
+print(f"   → Filas antes : {filas_antes}")
+print(f"   → Filas después: {filas_despues}")
+
+
+# ====================================================
+# 6. EXPORTAR ARCHIVO FINAL
+# ====================================================
+salida = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\6. Resultado Final\7. Julio 2025\08.Modulo_Estado_Afiliación_Julio_2025.xlsx"
+df_merge.to_excel(salida, index=False, engine="openpyxl")
+
+print("\n💾 Archivo exportado correctamente en:")
+print(salida)
+
+print("\n🚀 MÓDULO 8 FINALIZADO EXITOSAMENTE")
