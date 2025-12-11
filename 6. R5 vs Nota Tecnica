@@ -1,0 +1,125 @@
+print("🚀 EY !! Bro — Iniciando MÓDULO 6 (Cruce con Nota Técnica)")
+
+import pandas as pd
+import unicodedata
+import re
+from datetime import date
+import datetime
+
+# ====================================================
+# 1. CONFIGURACIÓN DE ARCHIVOS
+# ====================================================
+archivo_entrada = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\6. Resultado Final\7. Julio 2025\05.Modulo_Capita_Julio_2025.xlsx"
+df_principal = pd.read_excel(archivo_entrada, dtype=str, engine="openpyxl")
+
+archivo_maestra = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\5. BD Fijas\0. Nota Tecnica\4.BD_Final_Nota_Tecnica.xlsx"
+df_maestra = pd.read_excel(archivo_maestra, sheet_name="Hoja1", dtype=str, engine="openpyxl")
+
+print("📥 Registros BD Principal:", len(df_principal))
+print("📥 Registros Nota Técnica:", len(df_maestra))
+
+
+# ====================================================
+# 2. CREAR LLAVE "Llave NT" EN BD PRINCIPAL
+# ====================================================
+print("\n🔑 Creando Llave NT...")
+
+df_principal["Codigo"] = df_principal["Codigo"].fillna("")
+df_principal["cum_cod_atc"] = df_principal["cum_cod_atc"].fillna("")
+
+df_principal["Llave NT"] = df_principal["Codigo"] + "_" + df_principal["cum_cod_atc"]
+
+print("✔ Llave NT creada correctamente")
+
+
+# ====================================================
+# 3. PREPARAR BD NOTA TÉCNICA (DEDUP) ANTES DEL MERGE
+# ====================================================
+print("\n📌 Verificando duplicados en la BD Nota Técnica...")
+
+right_key = "LLAVE NOTA TECNICA"
+cols_extraer = ["MODALIDAD", "COSTO MEDIO", "Q PROPIUESTA"]
+
+# Validación de columnas
+if right_key not in df_maestra.columns:
+    raise KeyError(f"❌ No existe la columna '{right_key}' en Nota Técnica.")
+
+for col in cols_extraer:
+    if col not in df_maestra.columns:
+        raise KeyError(f"❌ Falta la columna '{col}' en Nota Técnica.")
+
+# Conteo de duplicados
+total_nt = len(df_maestra)
+unique_nt = df_maestra[right_key].nunique(dropna=True)
+dups_nt = total_nt - df_maestra.drop_duplicates(subset=[right_key]).shape[0]
+
+print(f"   → Filas totales: {total_nt:,}")
+print(f"   → Llaves únicas: {unique_nt:,}")
+print(f"   → Filas duplicadas por llave: {dups_nt:,}")
+
+# ✔ Quitar duplicados por llave
+df_nt_reducida = df_maestra.drop_duplicates(subset=[right_key], keep="first")[
+    [right_key] + cols_extraer
+].copy()
+
+print("✔ BD Nota Técnica reducida creada correctamente")
+print("   → Filas después de dedupe:", len(df_nt_reducida))
+
+
+# ====================================================
+# 4. MERGE EXACTO (SIN DUPLICAR FILAS)
+# ====================================================
+print("\n🔗 Realizando merge exacto Llave NT vs LLAVE NOTA TECNICA...")
+
+before = len(df_principal)
+
+df_merge = df_principal.merge(
+    df_nt_reducida,
+    how="left",
+    left_on="Llave NT",
+    right_on=right_key,
+    sort=False,
+    suffixes=("", "_NT")
+)
+
+after = len(df_merge)
+
+print(f"✔ Merge realizado")
+print(f"   → Filas antes : {before:,}")
+print(f"   → Filas después: {after:,}")
+
+if before != after:
+    print("⚠ ALERTA: El merge está generando filas adicionales. 👇")
+    mult = df_merge.groupby("Llave NT").size().loc[lambda x: x > 1]
+    if not mult.empty:
+        print("   → Llaves que se multiplicaron (primeras 5):")
+        print(mult.head(5))
+else:
+    print("✔ El número de filas se mantuvo. (OK)")
+
+
+# ====================================================
+# 5. RENOMBRAR COLUMNAS (SIN CREAR 'Q PROPIUESTA 2')
+# ====================================================
+df_merge.rename(columns={
+    "MODALIDAD": "MODALIDAD",
+    "COSTO MEDIO": "COSTO_MEDIO",
+    "Q PROPIUESTA": "Q_PROPUESTA"
+}, inplace=True)
+
+print("\n📌 Columnas agregadas al resultado final:")
+print("   - MODALIDAD")
+print("   - COSTO_MEDIO")
+print("   - Q_PROPUESTA")
+
+
+# ====================================================
+# 6. EXPORTAR ARCHIVO FINAL
+# ====================================================
+salida = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\6. Resultado Final\7. Julio 2025\06.Modulo_Nota_Credito_Julio_2025.xlsx"
+df_merge.to_excel(salida, index=False, engine="openpyxl")
+
+print("\n💾 Archivo exportado correctamente en:")
+print(salida)
+
+print("\n🚀 MÓDULO 6 FINALIZADO EXITOSAMENTE")
