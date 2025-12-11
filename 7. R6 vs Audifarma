@@ -1,0 +1,80 @@
+print("🚀 EY !! Bro — Iniciando MÓDULO 7 (Cruce con Audifarma)")  
+import pandas as pd
+import unicodedata
+import re
+from datetime import date
+import datetime
+
+# ====================================================
+# 1. CONFIGURACIÓN DE ARCHIVOS
+# ====================================================
+archivo_entrada = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\6. Resultado Final\7. Julio 2025\06.Modulo_Nota_Credito_Julio_2025.xlsx"
+df_principal = pd.read_excel(archivo_entrada, dtype=str, engine="openpyxl")
+
+archivo_audifarma = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\5. BD Fijas\2. Validaciones Audifarma\07._BD_Validaciones_Audifarma_Julio.xlsx"
+df_audi = pd.read_excel(archivo_audifarma, sheet_name="Hoja1", dtype=str, engine="openpyxl")
+
+
+
+# ====================================================
+# 2. NORMALIZACIÓN DE LLAVES
+# ====================================================
+df_principal["numero_identificacion"] = df_principal["numero_identificacion"].fillna("").astype(str).str.strip()
+df_audi["DOCUMENTO_USUARIO"] = df_audi["DOCUMENTO_USUARIO"].fillna("").astype(str).str.strip()
+
+
+
+# ====================================================
+# 3. SELECCIÓN DE COLUMNAS DE AUDIFARMA
+# ====================================================
+columnas_utiles = [
+    "DOCUMENTO_USUARIO",
+    "NOMBRE_SERVICIO",
+    "FECHA_SERVICIO",
+    "SERVICIOS",
+    "RADICADO"
+]
+
+df_audi = df_audi[columnas_utiles].copy()
+
+
+
+# ====================================================
+# 4. ELIMINAR DUPLICADOS PARA EVITAR MULTIPLICACIÓN
+# ====================================================
+# Nos quedamos con SOLO UNA fila por DOCUMENTO_USUARIO
+df_audi = df_audi.sort_values(by="FECHA_SERVICIO", ascending=False)
+df_audi = df_audi.drop_duplicates(subset=["DOCUMENTO_USUARIO"], keep="first")
+
+
+
+# ====================================================
+# 5. CRUCE EXACTO
+# ====================================================
+print("\n🔗 Realizando cruce con BD Audifarma...")
+
+filas_antes = len(df_principal)
+
+df_merge = df_principal.merge(
+    df_audi,
+    left_on="numero_identificacion",
+    right_on="DOCUMENTO_USUARIO",
+    how="left"
+)
+
+filas_despues = len(df_merge)
+
+print("✔ Cruce completado")
+print(f"   → Filas antes : {filas_antes}")
+print(f"   → Filas después: {filas_despues}")
+
+
+
+# ====================================================
+# 6. EXPORTAR ARCHIVO FINAL
+# ====================================================
+salida = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\6. Resultado Final\7. Julio 2025\07.Modulo_Audifarma_Julio_2025.xlsx"
+df_merge.to_excel(salida, index=False, engine="openpyxl")
+
+print("\n💾 Archivo exportado correctamente en:")
+print(salida)
