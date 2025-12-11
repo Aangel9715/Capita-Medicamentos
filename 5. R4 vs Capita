@@ -1,1 +1,75 @@
+print("🚀 EY !! Bro") 
 
+import pandas as pd
+import unicodedata
+import re
+from datetime import date
+import datetime
+
+# ====================================================
+# 1. CONFIGURACIÓN DE ARCHIVOS
+# ====================================================
+archivo_entrada = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\6. Resultado Final\7. Julio 2025\04.Modulo_CUMsInvima_Julio_2025.xlsx"
+df_principal = pd.read_excel(archivo_entrada, dtype=str, engine="openpyxl")
+
+archivo_maestra = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\5. BD Fijas\1. BD Pre-factura\07._Capita_Julio_2025.xlsx"
+df_maestra = pd.read_excel(archivo_maestra, sheet_name="Hoja1", dtype=str, engine="openpyxl")
+
+print("📥 Registros iniciales en archivo principal:", len(df_principal))
+print("📥 Registros en BD Capita:", len(df_maestra))
+
+
+# ====================================================
+# 2. CREAR LLAVES PARA CRUCE
+# ====================================================
+print("\n🔧 Creando llaves para cruce...")
+
+# --- Limpieza de campos requeridos ---
+df_principal["tipo_identificacion"] = df_principal["tipo_identificacion"].fillna("").astype(str)
+df_principal["numero_identificacion"] = df_principal["numero_identificacion"].fillna("").astype(str)
+
+df_maestra["Llave Capita"] = df_maestra["Llave Capita"].fillna("").astype(str)
+
+# --- Crear llave en Principal ---
+df_principal["LLAVE_PRINCIPAL"] = df_principal["tipo_identificacion"].str.strip() + "_" + df_principal["numero_identificacion"].str.strip()
+
+print("✔ Llave creada en principal → LLAVE_PRINCIPAL")
+
+
+# ====================================================
+# 3. CRUCE EXACTO CONTRA BD CAPITA
+# ====================================================
+print("\n🔗 Realizando cruce con BD Capita...")
+
+columnas_extraer = ["XRAZSOC", "Validacion", "Valor a reconocer", "CRITERIO"]
+
+df_merge = df_principal.merge(
+    df_maestra[["Llave Capita"] + columnas_extraer],
+    left_on="LLAVE_PRINCIPAL",
+    right_on="Llave Capita",
+    how="left"
+)
+
+print("✔ Cruce finalizado")
+print("   → Filas antes :", len(df_principal))
+print("   → Filas después:", len(df_merge))
+
+
+# ====================================================
+# 4. VALIDACIÓN DEL CRUCE
+# ====================================================
+sin_cruce = df_merge["Llave Capita"].isna().sum()
+print(f"⚠ Registros sin coincidencia en Capita: {sin_cruce}")
+
+if sin_cruce > 0:
+    print("   → Revisa estos casos, puede haber problemas de identificación.")
+
+
+# ====================================================
+# 5. GUARDAR RESULTADO
+# ====================================================
+salida = r"C:\Users\alejandroar\Desktop\1. Capita\1. Sikuany - 830512772\6. Resultado Final\7. Julio 2025\05.Modulo_Capita_Julio_2025.xlsx"
+df_merge.to_excel(salida, index=False, engine="openpyxl")
+
+print("\n💾 Archivo generado correctamente en:")
+print(salida)
